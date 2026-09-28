@@ -248,6 +248,52 @@
   line-height: 1.4;
 }
 
+.variant-picker {
+  margin-bottom: 1rem;
+}
+
+.variant-options {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.variant-option {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.3rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 0.2rem);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.variant-option.selected {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) {
+  .variant-option:not(.selected):hover {
+    color: var(--accent);
+  }
+}
+
+.variant-blurb {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+}
+
 .generate-table {
   display: flex;
   flex-direction: column;
@@ -1156,6 +1202,38 @@
 .nc-number.next circle {
   stroke: var(--accent);
   stroke-width: 0.06;
+}
+
+/* Step Count: the line hit this number on the wrong step, or went past its step elsewhere. */
+.nc-number.wrong circle {
+  fill: var(--danger);
+}
+
+.nc-number.wrong text {
+  fill: #fff;
+}
+
+.nc-number.wrong {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nc-wrong-shake 0.35s ease;
+}
+
+@keyframes nc-wrong-shake {
+  20%,
+  60% {
+    transform: translateX(-6%);
+  }
+  40%,
+  80% {
+    transform: translateX(6%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-number.wrong {
+    animation: none;
+  }
 }
 
 .nc-head {

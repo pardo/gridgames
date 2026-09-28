@@ -26,10 +26,19 @@ export interface GamePlayProps {
   /** Encoded puzzle, as found in the URL. */
   code: string
   difficulty: Difficulty
+  /** Variant id from the URL, for games that have variants (may be missing on old links). */
+  variant?: string
   onBackToMenu: () => void
-  onNewRandom: (size: number, difficulty: Difficulty) => void
+  onNewRandom: (size: number, difficulty: Difficulty, variant?: string) => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+}
+
+/** A rule set a game offers alongside difficulty, picked in its menu. */
+export interface VariantOption {
+  id: string
+  label: string
+  blurb: string
 }
 
 /** Everything the shell needs to list, generate and play one grid game. */
@@ -39,8 +48,12 @@ export interface GameDefinition {
   tagline: string
   rules: string[]
   sizes: number[]
+  /** Optional variants; the first is the default. */
+  variants?: VariantOption[]
+  /** Per-game wording for the difficulty legend, overriding the shared blurbs. */
+  difficultyBlurbs?: Partial<Record<Difficulty, string>>
   /** Build a fresh random puzzle and return its URL-safe code. */
-  generate: (size: number, difficulty: Difficulty) => string
+  generate: (size: number, difficulty: Difficulty, variant?: string) => string
   /** Size of the puzzle a code describes, or null if the code is invalid. */
   sizeOf: (code: string) => number | null
   Play: ComponentType<GamePlayProps>

@@ -36,16 +36,26 @@ export function saveProgress(gameId: string, code: string, progress: unknown): v
   write(`${gameId}:progress:${code}`, progress)
 }
 
-/**
- * Random puzzles are one-offs, so runs are tracked per mode (game + size +
- * difficulty), e.g. every "7x7 Hard" you've solved.
- */
-function modeKey(gameId: string, size: number, difficulty: Difficulty): string {
-  return `${gameId}:mode:${size}-${difficulty}`
+/** A small per-game preference, such as the last variant picked in the menu. */
+export function loadSetting(gameId: string, name: string): string | null {
+  return read<string | null>(`${gameId}:setting:${name}`, null)
 }
 
-export function loadModeHistory(gameId: string, size: number, difficulty: Difficulty): RunRecord[] {
-  return read<RunRecord[]>(modeKey(gameId, size, difficulty), [])
+export function saveSetting(gameId: string, name: string, value: string): void {
+  write(`${gameId}:setting:${name}`, value)
+}
+
+/**
+ * Random puzzles are one-offs, so runs are tracked per mode (game + size +
+ * difficulty, plus the variant for games that have them), e.g. every
+ * "7x7 Hard" you've solved.
+ */
+function modeKey(gameId: string, size: number, difficulty: Difficulty, variant?: string): string {
+  return `${gameId}:mode:${size}-${difficulty}${variant ? `-${variant}` : ''}`
+}
+
+export function loadModeHistory(gameId: string, size: number, difficulty: Difficulty, variant?: string): RunRecord[] {
+  return read<RunRecord[]>(modeKey(gameId, size, difficulty, variant), [])
 }
 
 export function addModeRunRecord(
@@ -53,9 +63,10 @@ export function addModeRunRecord(
   size: number,
   difficulty: Difficulty,
   record: RunRecord,
+  variant?: string,
 ): RunRecord[] {
-  const next = [record, ...loadModeHistory(gameId, size, difficulty)].slice(0, MAX_HISTORY)
-  write(modeKey(gameId, size, difficulty), next)
+  const next = [record, ...loadModeHistory(gameId, size, difficulty, variant)].slice(0, MAX_HISTORY)
+  write(modeKey(gameId, size, difficulty, variant), next)
   return next
 }
 

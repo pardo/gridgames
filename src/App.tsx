@@ -13,6 +13,7 @@ interface PendingGeneration {
   gameId: string
   size: number
   difficulty: Difficulty
+  variant?: string
   /** 'replace' keeps a deep link tidy; 'push' adds a history entry. */
   history: 'replace' | 'push'
 }
@@ -42,7 +43,8 @@ export default function App() {
       if (next.type === 'random') {
         // Generate fresh, then swap the URL for a stable link to this exact
         // puzzle so a reload (or iOS reviving a background tab) resumes it.
-        setPending({ gameId: next.gameId, size: next.size, difficulty: next.difficulty, history: 'replace' })
+        const { gameId, size, difficulty, variant } = next
+        setPending({ gameId, size, difficulty, variant, history: 'replace' })
       } else {
         setRoute(next)
       }
@@ -62,11 +64,12 @@ export default function App() {
       const game = findGame(pending.gameId)
       if (game) {
         try {
-          const code = game.generate(pending.size, pending.difficulty)
-          const hash = playHash(game.id, pending.difficulty, code)
+          const { size, difficulty, variant } = pending
+          const code = game.generate(size, difficulty, variant)
+          const hash = playHash(game.id, difficulty, code, variant)
           if (pending.history === 'replace') history.replaceState(null, '', hash)
           else history.pushState(null, '', hash)
-          setRoute({ type: 'play', gameId: game.id, difficulty: pending.difficulty, code })
+          setRoute({ type: 'play', gameId: game.id, difficulty, code, variant })
         } catch (err) {
           console.error(err)
           setRoute({ type: 'game', gameId: game.id })
@@ -87,8 +90,8 @@ export default function App() {
   }
 
   const game = route.type === 'home' ? undefined : findGame(route.gameId)
-  const generate = (size: number, difficulty: Difficulty) => {
-    if (game) setPending({ gameId: game.id, size, difficulty, history: 'push' })
+  const generate = (size: number, difficulty: Difficulty, variant?: string) => {
+    if (game) setPending({ gameId: game.id, size, difficulty, variant, history: 'push' })
   }
 
   let view
@@ -100,6 +103,7 @@ export default function App() {
         key={route.code}
         code={route.code}
         difficulty={route.difficulty}
+        variant={route.variant}
         onBackToMenu={() => navigate(gameHash(game.id))}
         onNewRandom={generate}
         theme={theme}

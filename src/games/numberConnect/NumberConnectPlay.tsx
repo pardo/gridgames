@@ -1,0 +1,182 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { StatsModal } from '../../components/StatsModal'
+import { ThemeToggle } from '../../components/ThemeToggle'
+import { WinModal } from '../../components/WinModal'
+import { formatDuration, useTimer } from '../../hooks/useTimer'
+import { addModeRunRecord, loadModeHistory, loadProgress, saveProgress, type RunRecord } from '../../storage'
+import { DIFFICULTIES, type GamePlayProps } from '../types'
+import { Board } from './Board'
+import { decodePuzzle } from './encode'
+import { isSolved, openCellCount } from './puzzle'
+
+export const GAME_ID = 'simple-number-connect'
+
+interface Progress {
+  path: number[]
+  elapsedMs: number
+  completed: boolean
+}
+
+export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom, theme, onToggleTheme }: GamePlayProps) {
+  const puzzle = useMemo(() => decodePuzzle(code), [code])
+  const saved = useMemo(() => loadProgress<Progress>(GAME_ID, code), [code])
+  const [path, setPath] = useState<number[]>(saved?.path ?? [])
+  const [won, setWon] = useState(saved?.completed ?? false)
+  const [undoStack, setUndoStack] = useState<number[][]>([])
+  const [showStats, setShowStats] = useState(false)
+  const [showWin, setShowWin] = useState(false)
+  const strokeBefore = useRef<number[] | null>(null)
+  const timer = useTimer(saved?.elapsedMs ?? 0)
+  const size = puzzle?.size ?? 0
+  const [history, setHistory] = useState<RunRecord[]>(() => loadModeHistory(GAME_ID, size, difficulty))
+
+  useEffect(() => {
+    if (!won) timer.start()
+    return () => timer.pause()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code])
+
+  useEffect(() => {
+    saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won } satisfies Progress)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, won])
+
+  // Save the clock now and then too, so a closed tab doesn't lose time.
+  useEffect(() => {
+    const id = setInterval(() => {
+      saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won } satisfies Progress)
+    }, 5000)
+    return () => clearInterval(id)
+  })
+
+  if (!puzzle) {
+    return (
+      <div className="play-view">
+        <p className="empty-note">This puzzle link is broken.</p>
+        <button type="button" className="pill-button" onClick={onBackToMenu}>
+          ← Menu
+        </button>
+      </div>
+    )
+  }
+
+  const total = openCellCount(puzzle)
+
+  const changePath = (next: number[]) => {
+    if (strokeBefore.current) {
+      const before = strokeBefore.current
+      strokeBefore.current = null
+      setUndoStack((s) => [...s.slice(-49), before])
+    }
+    setPath(next)
+    if (!won && isSolved(puzzle, next)) {
+      timer.pause()
+      setWon(true)
+      setShowWin(true)
+      setHistory(
+        addModeRunRecord(GAME_ID, puzzle.size, difficulty, {
+          timeMs: timer.elapsedMs,
+          completedAt: new Date().toISOString(),
+          code,
+        }),
+      )
+    }
+  }
+
+  const undo = () => {
+    if (!undoStack.length) return
+    setPath(undoStack[undoStack.length - 1])
+    setUndoStack((s) => s.slice(0, -1))
+  }
+
+  const clear = () => {
+    if (!path.length) return
+    setUndoStack((s) => [...s.slice(-49), path])
+    setPath([])
+  }
+
+  const restart = () => {
+    setPath([])
+    setUndoStack([])
+    setWon(false)
+    setShowWin(false)
+    timer.reset(0)
+    timer.start()
+  }
+
+  const label = DIFFICULTIES.find((d) => d.id === difficulty)?.label ?? difficulty
+  const filled = path.length
+
+  return (
+    <div className="play-view">
+      <header className="play-header">
+        <button type="button" className="back-button" onClick={onBackToMenu}>
+          ← Menu
+        </button>
+        <h2>
+          {puzzle.size}x{puzzle.size} {label}
+        </h2>
+        <div className="stats">
+          <button type="button" className="stats-button" onClick={() => setShowStats(true)} title="Stats">
+            📊
+          </button>
+          <span>⏱ {formatDuration(timer.elapsedMs)}</span>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        </div>
+      </header>
+
+      <div className="board-wrap">
+        <Board
+          puzzle={puzzle}
+          path={path}
+          onPathChange={changePath}
+          onStrokeStart={(before) => (strokeBefore.current = before)}
+          disabled={won}
+          solved={won}
+        />
+      </div>
+
+      <div className="play-footer">
+        <div className="progress-bar" aria-label={`${filled} of ${total} cells filled`}>
+          <div className={`progress-fill${won ? ' done' : ''}`} style={{ width: `${(filled / total) * 100}%` }} />
+        </div>
+        <p className="play-hint">
+          {won
+            ? 'Solved!'
+            : path.length === 0
+              ? 'Touch 1 and drag through every cell, in number order.'
+              : `${filled} / ${total} cells · drag back to erase, tap the path to cut it`}
+        </p>
+        <div className="play-actions">
+          <button type="button" className="pill-button" onClick={undo} disabled={won || !undoStack.length}>
+            ↶ Undo
+          </button>
+          <button type="button" className="pill-button" onClick={clear} disabled={won || !path.length}>
+            ✕ Clear
+          </button>
+          {won && (
+            <button type="button" className="pill-button accent" onClick={() => onNewRandom(puzzle.size, difficulty)}>
+              🎲 New puzzle
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showWin && (
+        <WinModal
+          elapsedMs={timer.elapsedMs}
+          history={history}
+          onPlayAgain={restart}
+          onBackToMenu={onBackToMenu}
+          onNewRandom={() => onNewRandom(puzzle.size, difficulty)}
+          onViewStats={() => setShowStats(true)}
+          onClose={() => setShowWin(false)}
+        />
+      )}
+
+      {showStats && (
+        <StatsModal title={`${puzzle.size}x${puzzle.size} ${label}`} history={history} onClose={() => setShowStats(false)} />
+      )}
+    </div>
+  )
+}

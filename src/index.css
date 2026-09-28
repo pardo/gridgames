@@ -1,0 +1,98 @@
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+}
+
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --border: #e4e1d8;
+  --ink: #1c1c1e;
+  --ink-soft: #6b6a66;
+  --accent: #6d5efc;
+  --accent-ink: #ffffff;
+  --success: #1fa971;
+  --success-bg: #e6f7ef;
+  --danger: #e0483f;
+  --line: #2a2a2e;
+  --blocked: #3a3a42;
+  --shadow: 0 1px 2px rgba(20, 20, 25, 0.04), 0 8px 24px -12px rgba(20, 20, 25, 0.18);
+  --shadow-sm: 0 1px 2px rgba(20, 20, 25, 0.06);
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+}
+
+/*
+ * Dark palette applies when the system prefers dark and the user hasn't
+ * explicitly chosen light (media query path), or when the toggle has
+ * explicitly set dark regardless of system preference (attribute path).
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #131318;
+    --surface: #1c1c22;
+    --border: #34343c;
+    --ink: #f2f1ef;
+    --ink-soft: #a3a2ac;
+    --accent: #8b7dff;
+    --accent-ink: #131318;
+    --success: #34d399;
+    --success-bg: #113328;
+    --danger: #ff6b61;
+    --line: #eceaea;
+    --blocked: #07070a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px -12px rgba(0, 0, 0, 0.6);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #131318;
+  --surface: #1c1c22;
+  --border: #34343c;
+  --ink: #f2f1ef;
+  --ink-soft: #a3a2ac;
+  --accent: #8b7dff;
+  --accent-ink: #131318;
+  --success: #34d399;
+  --success-bg: #113328;
+  --danger: #ff6b61;
+  --line: #eceaea;
+  --blocked: #07070a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 28px -12px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A drag game, not a document: no text selection or iOS long-press callout. */
+#root {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  /* Stop pull-to-refresh / bounce from hijacking a drag near the edges. */
+  overscroll-behavior: none;
+}

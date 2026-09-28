@@ -1,4 +1,4 @@
-import type { LineStyle } from '../../hooks/useLineSettings'
+import type { LineStyle } from '../../../hooks/useLineSettings'
 
 export const hue = (i: number, spread: number) => Math.round((i / Math.max(1, spread - 1)) * 320)
 

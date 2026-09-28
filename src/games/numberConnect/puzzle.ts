@@ -1,3 +1,5 @@
+import type { PathRules } from '../shared/path/rules'
+
 /**
  * Simple Number Connect: draw one path from 1 through every number in order,
  * filling every open cell. Blocked cells can't be entered; thin walls sit on
@@ -78,4 +80,24 @@ export function isSolved(p: NCPuzzle, path: number[]): boolean {
     }
   }
   return next === p.checkpoints.length + 1
+}
+
+/** Drawing rules for the shared board: orthogonal steps, numbers in order, stop on the last one. */
+export function pathRules(p: NCPuzzle): PathRules {
+  const clue = clueMap(p)
+  const last = p.checkpoints.length
+  return {
+    size: p.size,
+    diagonals: false,
+    start: p.checkpoints[0],
+    canExtend: (line, next) => {
+      const head = line[line.length - 1]
+      if (clue[head] === last || !canStep(p, head, next)) return false
+      if (!clue[next]) return true
+      // The newest number on the line (1 is always its first cell) must come just before.
+      let i = line.length - 1
+      while (!clue[line[i]]) i--
+      return clue[next] === clue[line[i]] + 1
+    },
+  }
 }

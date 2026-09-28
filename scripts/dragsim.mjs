@@ -5,8 +5,8 @@ import { createServer } from 'vite'
 
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { generatePuzzle } = await server.ssrLoadModule('/src/games/numberConnect/generator.ts')
-const { cellUnder, moveToward } = await server.ssrLoadModule('/src/games/numberConnect/drag.ts')
-const { clueMap } = await server.ssrLoadModule('/src/games/numberConnect/puzzle.ts')
+const { cellUnder, moveToward } = await server.ssrLoadModule('/src/games/shared/path/drag.ts')
+const { pathRules } = await server.ssrLoadModule('/src/games/numberConnect/puzzle.ts')
 
 /** A finger trail through the solution's cell centres, cutting each corner. */
 function fingerTrail(n, solution, cut, wobble, rng, overshoot = 0) {
@@ -60,7 +60,7 @@ function fingerTrail(n, solution, cut, wobble, rng, overshoot = 0) {
 /** Mirrors Board.handleMove. */
 function drag(puzzle, trailPts) {
   const n = puzzle.size
-  const clue = clueMap(puzzle)
+  const rules = pathRules(puzzle)
   let cur = [puzzle.checkpoints[0]]
   let trail = [trailPts[0]]
   for (let i = 1; i < trailPts.length; i++) {
@@ -73,7 +73,7 @@ function drag(puzzle, trailPts) {
       if (trail.length > 16) trail.shift()
       const target = cellUnder(n, pt, cur[cur.length - 1])
       if (target === null) continue
-      const moved = moveToward(puzzle, clue, cur, target, trail)
+      const moved = moveToward(rules, cur, target, trail)
       if (moved !== cur) {
         cur = moved
         trail = [pt]

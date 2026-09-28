@@ -1,12 +1,30 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { vibrate, type LineSettings } from '../../hooks/useLineSettings'
+import { vibrate, type LineSettings } from '../../../hooks/useLineSettings'
 import { cellUnder, moveToward } from './drag'
 import { isMulticolor, stepColor } from './lineColors'
 import { PathLine } from './PathLine'
-import { clueMap, openCellCount, type NCPuzzle } from './puzzle'
+import type { PathRules } from './rules'
+
+/** A number drawn on the board. */
+export interface BoardMark {
+  cell: number
+  label: number
+  /** reached: on the line. next: where the line must go next. wrong: on the line at the wrong step. */
+  state?: 'reached' | 'next' | 'wrong'
+}
 
 interface BoardProps {
-  puzzle: NCPuzzle
+  rules: PathRules
+  blocked: boolean[]
+  /** Per cell: wall between this cell and the one to its right. */
+  wallRight: boolean[]
+  /** Per cell: wall between this cell and the one below it. */
+  wallDown: boolean[]
+  marks: BoardMark[]
+  /** Cell the pulsing "head here next" ring sits on, if any. */
+  ringCell?: number
+  /** True when step `index` (0-based) of the line landing on `cell` hits a number: burst and a stronger buzz. */
+  isMilestone: (cell: number, index: number) => boolean
   path: number[]
   onPathChange: (path: number[]) => void
   /** Called when a drag starts, with the path as it was before it. */
@@ -40,10 +58,23 @@ let fxSeq = 0
  */
 const hasGlow = (style: LineSettings['lineStyle']) => style === 'neon' || style === 'fire'
 
-export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, solved, look }: BoardProps) {
-  const n = puzzle.size
-  const clue = useMemo(() => clueMap(puzzle), [puzzle])
-  const openCells = useMemo(() => openCellCount(puzzle), [puzzle])
+export function Board({
+  rules,
+  blocked,
+  wallRight,
+  wallDown,
+  marks,
+  ringCell,
+  isMilestone,
+  path,
+  onPathChange,
+  onStrokeStart,
+  disabled,
+  solved,
+  look,
+}: BoardProps) {
+  const n = rules.size
+  const openCells = useMemo(() => blocked.reduce((sum, b) => sum + (b ? 0 : 1), 0), [blocked])
   const boardRef = useRef<HTMLDivElement>(null)
   const pathRef = useRef(path)
   useLayoutEffect(() => {
@@ -69,7 +100,7 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
       const x = (c % n) + 0.5
       const y = Math.floor(c / n) + 0.5
       const color = colorAt(i, next.length)
-      const isNumber = clue[c] > 0 && i > 0
+      const isNumber = i > 0 && isMilestone(c, i)
       if (isNumber) hitNumber = true
       if (isNumber && look.numberBurst) {
         added.push({ id: ++fxSeq, kind: 'burst', x, y, color })
@@ -123,7 +154,6 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
   }
 
   const inPath = useMemo(() => new Set(path), [path])
-  const nextNumber = useMemo(() => path.reduce((k, c) => (clue[c] ? k + 1 : k), 1), [path, clue])
 
   /** Pointer position in board-cell units (0..n on each axis). */
   const localPoint = (e: React.PointerEvent) => {
@@ -139,8 +169,8 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
     const cur = pathRef.current
     let next: number[] | null = null
     if (cur.length === 0) {
-      // Any touch starts from 1, but only touching 1 itself begins a drag.
-      if (cell === puzzle.checkpoints[0]) next = [cell]
+      // Only touching the start cell begins a line.
+      if (cell === rules.start) next = [cell]
     } else {
       const idx = cur.indexOf(cell)
       // Touching anywhere on the path cuts it back to that cell.
@@ -177,7 +207,7 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
       if (drag.trail.length > 16) drag.trail.shift()
       const target = cellUnder(n, pt, cur[cur.length - 1])
       if (target === null) continue
-      const moved = moveToward(puzzle, clue, cur, target, drag.trail)
+      const moved = moveToward(rules, cur, target, drag.trail)
       if (moved !== cur) {
         cur = moved
         // Only the trail since the head last moved matters for the next route.
@@ -204,8 +234,8 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
   for (let c = 0; c < n * n; c++) {
     const r = Math.floor(c / n)
     const col = c % n
-    if (puzzle.wallRight[c] && col < n - 1) walls.push({ x1: col + 1, y1: r, x2: col + 1, y2: r + 1, key: `r${c}` })
-    if (puzzle.wallDown[c] && r < n - 1) walls.push({ x1: col, y1: r + 1, x2: col + 1, y2: r + 1, key: `d${c}` })
+    if (wallRight[c] && col < n - 1) walls.push({ x1: col + 1, y1: r, x2: col + 1, y2: r + 1, key: `r${c}` })
+    if (wallDown[c] && r < n - 1) walls.push({ x1: col, y1: r + 1, x2: col + 1, y2: r + 1, key: `d${c}` })
   }
 
   const wave = solved && look.winWave
@@ -232,7 +262,7 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
       {Array.from({ length: n * n }, (_, c) => (
         <div
           key={c}
-          className={`nc-cell${puzzle.blocked[c] ? ' blocked' : ''}${inPath.has(c) ? ' filled' : ''}`}
+          className={`nc-cell${blocked[c] ? ' blocked' : ''}${inPath.has(c) ? ' filled' : ''}`}
           style={cellStyle(c)}
         />
       ))}
@@ -252,22 +282,16 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
         {walls.map((w) => (
           <line key={w.key} className="nc-wall" x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} />
         ))}
-        {puzzle.checkpoints.map((c, i) => {
+        {marks.map(({ cell: c, label, state }) => {
           const cx = (c % n) + 0.5
           const cy = Math.floor(c / n) + 0.5
-          const reached = inPath.has(c)
-          const isNext = !solved && i + 1 === nextNumber && path.length > 0
           return (
-            <g
-              key={c}
-              className={`nc-number${reached ? ' reached' : ''}${isNext ? ' next' : ''}`}
-              style={cellStyle(c)}
-            >
+            <g key={c} className={`nc-number${state ? ` ${state}` : ''}`} style={cellStyle(c)}>
               <circle cx={cx} cy={cy} r={0.34} />
               {/* Alphabetic baseline nudged down by half the digit height: dominant-baseline
                   centres the whole font box (and differs on iOS), which sits the digits high. */}
-              <text x={cx} y={cy} dy="0.36em" fontSize={i + 1 >= 10 ? 0.3 : 0.36}>
-                {i + 1}
+              <text x={cx} y={cy} dy="0.36em" fontSize={label >= 100 ? 0.24 : label >= 10 ? 0.3 : 0.36}>
+                {label}
               </text>
             </g>
           )
@@ -286,12 +310,12 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
       {/* Effects are plain HTML elements animated with transform/opacity only,
           which the browser runs on the GPU without repainting the board. */}
       <div className="nc-fx-layer" aria-hidden="true">
-        {!solved && path.length > 0 && nextNumber <= puzzle.checkpoints.length && (
+        {!solved && ringCell !== undefined && (
           <span
             className="nc-next-ring"
             style={{
-              left: `${(((puzzle.checkpoints[nextNumber - 1] % n) + 0.5) / n) * 100}%`,
-              top: `${((Math.floor(puzzle.checkpoints[nextNumber - 1] / n) + 0.5) / n) * 100}%`,
+              left: `${(((ringCell % n) + 0.5) / n) * 100}%`,
+              top: `${((Math.floor(ringCell / n) + 0.5) / n) * 100}%`,
               width: `${(0.8 / n) * 100}%`,
             }}
           />

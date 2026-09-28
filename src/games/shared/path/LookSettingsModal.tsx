@@ -1,4 +1,4 @@
-import { canVibrate, LINE_STYLES, type LineSettings } from '../../hooks/useLineSettings'
+import { canVibrate, LINE_STYLES, type LineSettings } from '../../../hooks/useLineSettings'
 import { PathLine } from './PathLine'
 
 interface LookSettingsModalProps {

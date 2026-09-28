@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import type { LineStyle } from '../../hooks/useLineSettings'
+import type { LineStyle } from '../../../hooks/useLineSettings'
 import { fireColor, hue } from './lineColors'
 
 interface PathLineProps {

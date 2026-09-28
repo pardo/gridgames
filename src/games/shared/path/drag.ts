@@ -1,4 +1,4 @@
-import { canStep, type NCPuzzle } from './puzzle'
+import { gridDistance, gridNeighbours, type PathRules } from './rules'
 
 /** How far back along the path a drag can jump in one go to erase. */
 const MAX_BACKTRACK = 3
@@ -55,20 +55,11 @@ function distToSegment2(p: Pt, a: Pt, b: Pt): number {
  *   cell): fill in the shortest legal route, preferring the one that hugs the
  *   finger's recent trail (board-cell coordinates, oldest first).
  */
-export function moveToward(
-  puzzle: NCPuzzle,
-  clue: number[],
-  cur: number[],
-  target: number,
-  trail: Pt[],
-): number[] {
-  const n = puzzle.size
+export function moveToward(rules: PathRules, cur: number[], target: number, trail: Pt[]): number[] {
   const head = cur[cur.length - 1]
   if (target === head) return cur
 
-  const hr = Math.floor(head / n)
-  const hc = head % n
-  const dist = Math.abs(Math.floor(target / n) - hr) + Math.abs((target % n) - hc)
+  const dist = gridDistance(rules.size, rules.diagonals, head, target)
 
   const idx = cur.lastIndexOf(target)
   if (idx >= 0) {
@@ -91,7 +82,7 @@ export function moveToward(
   let bestCost = dist
   for (let back = 0; back <= MAX_OVERSHOOT_UNDO && back < cur.length; back++) {
     const base = back ? cur.slice(0, cur.length - back) : cur
-    const route = bridge(puzzle, clue, base, target, trail, MAX_BRIDGE)
+    const route = bridge(rules, base, target, trail, MAX_BRIDGE)
     if (route && back + route.length <= bestCost) {
       bestCost = back + route.length
       best = [...base, ...route]
@@ -101,51 +92,40 @@ export function moveToward(
 }
 
 /** Shortest legal extension of `cur` ending on `target`, or null. */
-function bridge(puzzle: NCPuzzle, clue: number[], cur: number[], target: number, trail: Pt[], maxLen: number): number[] | null {
-  const n = puzzle.size
-  const head = cur[cur.length - 1]
-  const lastNumber = puzzle.checkpoints.length
-  if (clue[head] === lastNumber) return null
-
-  const used = new Set(cur)
-  const nextNumber = cur.reduce((k, c) => (clue[c] ? k + 1 : k), 1)
-  const tr = Math.floor(target / n)
-  const tc = target % n
-  const manhattan = (c: number) => Math.abs(Math.floor(c / n) - tr) + Math.abs((c % n) - tc)
-  const minSteps = manhattan(head)
+function bridge(rules: PathRules, cur: number[], target: number, trail: Pt[], maxLen: number): number[] | null {
+  const { size: n, diagonals } = rules
+  const minSteps = gridDistance(n, diagonals, cur[cur.length - 1], target)
   if (minSteps > maxLen) return null
 
+  const used = new Set(cur)
   const center = (c: number): Pt => ({ x: (c % n) + 0.5, y: Math.floor(c / n) + 0.5 })
   let best: number[] | null = null
   let bestScore = Infinity
 
-  // Iterative deepening: the first depth with any route wins; among routes of
-  // that length, keep the one closest to the finger's trail.
-  for (let depth = minSteps; depth <= minSteps && !best; depth++) {
-    const route: number[] = []
-    const search = (at: number, next: number, score: number) => {
-      if (route.length === depth) {
-        if (at === target && score < bestScore) {
-          bestScore = score
-          best = route.slice()
-        }
-        return
+  // Only the shortest routes count; among them, keep the one closest to the
+  // finger's trail. `line` is the path plus the route being tried.
+  const line = cur.slice()
+  const search = (score: number) => {
+    const at = line[line.length - 1]
+    if (line.length - cur.length === minSteps) {
+      if (at === target && score < bestScore) {
+        bestScore = score
+        best = line.slice(cur.length)
       }
-      if (clue[at] === lastNumber) return
-      const c = at % n
-      for (const nb of [at - n, at + n, c > 0 ? at - 1 : -1, c < n - 1 ? at + 1 : -1]) {
-        if (nb < 0 || nb >= n * n) continue
-        if (used.has(nb) || route.includes(nb)) continue
-        if (manhattan(nb) > depth - route.length - 1) continue
-        if (!canStep(puzzle, at, nb)) continue
-        const k = clue[nb]
-        if (k && k !== next) continue
-        route.push(nb)
-        search(nb, k ? next + 1 : next, score + (nb === target ? 0 : distToTrail2(center(nb), trail)))
-        route.pop()
-      }
+      return
     }
-    search(head, nextNumber, 0)
+    const left = minSteps - (line.length - cur.length) - 1
+    for (const nb of gridNeighbours(n, diagonals, at)) {
+      if (used.has(nb)) continue
+      if (gridDistance(n, diagonals, nb, target) > left) continue
+      if (!rules.canExtend(line, nb)) continue
+      line.push(nb)
+      used.add(nb)
+      search(score + (nb === target ? 0 : distToTrail2(center(nb), trail)))
+      used.delete(nb)
+      line.pop()
+    }
   }
+  search(0)
   return best
 }

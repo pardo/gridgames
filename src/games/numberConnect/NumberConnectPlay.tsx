@@ -6,10 +6,10 @@ import { useLineSettings, vibrate } from '../../hooks/useLineSettings'
 import { formatDuration, useTimer } from '../../hooks/useTimer'
 import { addModeRunRecord, loadModeHistory, loadProgress, saveProgress, type RunRecord } from '../../storage'
 import { DIFFICULTIES, type GamePlayProps } from '../types'
-import { Board } from './Board'
+import { Board, type BoardMark } from '../shared/path/Board'
+import { LookSettingsModal } from '../shared/path/LookSettingsModal'
 import { decodePuzzle } from './encode'
-import { LookSettingsModal } from './LookSettingsModal'
-import { isSolved, openCellCount } from './puzzle'
+import { clueMap, isSolved, openCellCount, pathRules } from './puzzle'
 import { solve } from './solver'
 
 export const GAME_ID = 'simple-number-connect'
@@ -24,6 +24,8 @@ interface Progress {
 
 export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom, theme, onToggleTheme }: GamePlayProps) {
   const puzzle = useMemo(() => decodePuzzle(code), [code])
+  const rules = useMemo(() => puzzle && pathRules(puzzle), [puzzle])
+  const clue = useMemo(() => puzzle && clueMap(puzzle), [puzzle])
   const saved = useMemo(() => loadProgress<Progress>(GAME_ID, code), [code])
   const [path, setPath] = useState<number[]>(saved?.path ?? [])
   const [won, setWon] = useState(saved?.completed ?? false)
@@ -62,7 +64,7 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
     return () => clearInterval(id)
   })
 
-  if (!puzzle) {
+  if (!puzzle || !rules || !clue) {
     return (
       <div className="play-view">
         <p className="empty-note">This puzzle link is broken.</p>
@@ -74,6 +76,14 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
   }
 
   const total = openCellCount(puzzle)
+  const inPath = new Set(path)
+  const nextNumber = path.reduce((k, c) => (clue[c] ? k + 1 : k), 1)
+  const marks: BoardMark[] = puzzle.checkpoints.map((cell, i) => ({
+    cell,
+    label: i + 1,
+    state: inPath.has(cell) ? 'reached' : !won && path.length > 0 && i + 1 === nextNumber ? 'next' : undefined,
+  }))
+  const ringCell = path.length > 0 ? puzzle.checkpoints[nextNumber - 1] : undefined
 
   const changePath = (next: number[]) => {
     if (strokeBefore.current) {
@@ -160,7 +170,13 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
 
       <div className="board-wrap">
         <Board
-          puzzle={puzzle}
+          rules={rules}
+          blocked={puzzle.blocked}
+          wallRight={puzzle.wallRight}
+          wallDown={puzzle.wallDown}
+          marks={marks}
+          ringCell={ringCell}
+          isMilestone={(cell) => clue[cell] > 0}
           path={path}
           onPathChange={changePath}
           onStrokeStart={(before) => (strokeBefore.current = before)}

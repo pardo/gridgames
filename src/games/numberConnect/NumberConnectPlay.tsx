@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { StatsModal } from '../../components/StatsModal'
 import { ThemeToggle } from '../../components/ThemeToggle'
 import { WinModal } from '../../components/WinModal'
+import { useLineSettings, vibrate } from '../../hooks/useLineSettings'
 import { formatDuration, useTimer } from '../../hooks/useTimer'
 import { addModeRunRecord, loadModeHistory, loadProgress, saveProgress, type RunRecord } from '../../storage'
 import { DIFFICULTIES, type GamePlayProps } from '../types'
 import { Board } from './Board'
 import { decodePuzzle } from './encode'
+import { LookSettingsModal } from './LookSettingsModal'
 import { isSolved, openCellCount } from './puzzle'
 
 export const GAME_ID = 'simple-number-connect'
@@ -25,6 +27,10 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
   const [undoStack, setUndoStack] = useState<number[][]>([])
   const [showStats, setShowStats] = useState(false)
   const [showWin, setShowWin] = useState(false)
+  const [showLook, setShowLook] = useState(false)
+  const { settings: look, update: updateLook } = useLineSettings()
+  const winTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => clearTimeout(winTimer.current), [])
   const strokeBefore = useRef<number[] | null>(null)
   const timer = useTimer(saved?.elapsedMs ?? 0)
   const size = puzzle?.size ?? 0
@@ -72,7 +78,9 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
     if (!won && isSolved(puzzle, next)) {
       timer.pause()
       setWon(true)
-      setShowWin(true)
+      if (look.haptics) vibrate([30, 60, 30, 60, 90])
+      // Let the victory wave play before the modal covers the board.
+      winTimer.current = window.setTimeout(() => setShowWin(true), look.winWave ? Math.min(1600, 500 + next.length * 25) : 250)
       setHistory(
         addModeRunRecord(GAME_ID, puzzle.size, difficulty, {
           timeMs: timer.elapsedMs,
@@ -117,7 +125,10 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           {puzzle.size}x{puzzle.size} {label}
         </h2>
         <div className="stats">
-          <button type="button" className="stats-button" onClick={() => setShowStats(true)} title="Stats">
+          <button type="button" className="stats-button" onClick={() => setShowLook(true)} title="Line & effects" aria-label="Line and effects">
+            🎨
+          </button>
+          <button type="button" className="stats-button hide-narrow" onClick={() => setShowStats(true)} title="Stats">
             📊
           </button>
           <span>⏱ {formatDuration(timer.elapsedMs)}</span>
@@ -133,6 +144,7 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           onStrokeStart={(before) => (strokeBefore.current = before)}
           disabled={won}
           solved={won}
+          look={look}
         />
       </div>
 
@@ -173,6 +185,8 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           onClose={() => setShowWin(false)}
         />
       )}
+
+      {showLook && <LookSettingsModal settings={look} onUpdate={updateLook} onClose={() => setShowLook(false)} />}
 
       {showStats && (
         <StatsModal title={`${puzzle.size}x${puzzle.size} ${label}`} history={history} onClose={() => setShowStats(false)} />

@@ -3,6 +3,8 @@
 A touch-friendly collection of grid puzzle games. Every puzzle is randomly
 generated at the size and difficulty you pick.
 
+**Play it: https://pardo.github.io/gridgames/**
+
 ## Games
 
 ### Simple Number Connect
@@ -13,6 +15,9 @@ Touch **1** and drag one continuous path through the numbers in order
 - Dark hatched cells are blocked; thick lines between cells are walls.
 - Drag back over your line to erase it, tap any part of the line to cut it
   there, or use Undo / Clear.
+- Pick a line style (Solid, Flow, Rainbow, Aurora, Neon, Comet, Beads, Fire)
+  and toggle drag effects (ripples, sparkles, number bursts, victory wave,
+  vibration) from the 🎨 menu.
 - Every generated puzzle is checked by a solver to have exactly one solution.
 - Difficulty: Easy puts numbers close together with few obstacles. Hard
   spaces the numbers far apart along the path but close together on the

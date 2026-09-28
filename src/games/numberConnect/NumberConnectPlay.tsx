@@ -10,6 +10,7 @@ import { Board } from './Board'
 import { decodePuzzle } from './encode'
 import { LookSettingsModal } from './LookSettingsModal'
 import { isSolved, openCellCount } from './puzzle'
+import { solve } from './solver'
 
 export const GAME_ID = 'simple-number-connect'
 
@@ -17,6 +18,8 @@ interface Progress {
   path: number[]
   elapsedMs: number
   completed: boolean
+  /** The solution was shown: this puzzle no longer counts toward stats. */
+  revealed?: boolean
 }
 
 export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom, theme, onToggleTheme }: GamePlayProps) {
@@ -24,6 +27,10 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
   const saved = useMemo(() => loadProgress<Progress>(GAME_ID, code), [code])
   const [path, setPath] = useState<number[]>(saved?.path ?? [])
   const [won, setWon] = useState(saved?.completed ?? false)
+  const [revealed, setRevealed] = useState(saved?.revealed ?? false)
+  /** True while the board is showing the revealed answer (not a solve by the player). */
+  const [showingSolution, setShowingSolution] = useState(false)
+  const [confirmReveal, setConfirmReveal] = useState(false)
   const [undoStack, setUndoStack] = useState<number[][]>([])
   const [showStats, setShowStats] = useState(false)
   const [showWin, setShowWin] = useState(false)
@@ -43,14 +50,14 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
   }, [code])
 
   useEffect(() => {
-    saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won } satisfies Progress)
+    saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won, revealed } satisfies Progress)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, won])
+  }, [path, won, revealed])
 
   // Save the clock now and then too, so a closed tab doesn't lose time.
   useEffect(() => {
     const id = setInterval(() => {
-      saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won } satisfies Progress)
+      saveProgress(GAME_ID, code, { path, elapsedMs: timer.elapsedMs, completed: won, revealed } satisfies Progress)
     }, 5000)
     return () => clearInterval(id)
   })
@@ -81,13 +88,15 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
       if (look.haptics) vibrate([30, 60, 30, 60, 90])
       // Let the victory wave play before the modal covers the board.
       winTimer.current = window.setTimeout(() => setShowWin(true), look.winWave ? Math.min(1600, 500 + next.length * 25) : 250)
-      setHistory(
-        addModeRunRecord(GAME_ID, puzzle.size, difficulty, {
-          timeMs: timer.elapsedMs,
-          completedAt: new Date().toISOString(),
-          code,
-        }),
-      )
+      if (!revealed) {
+        setHistory(
+          addModeRunRecord(GAME_ID, puzzle.size, difficulty, {
+            timeMs: timer.elapsedMs,
+            completedAt: new Date().toISOString(),
+            code,
+          }),
+        )
+      }
     }
   }
 
@@ -103,7 +112,20 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
     setPath([])
   }
 
+  const revealSolution = () => {
+    setConfirmReveal(false)
+    const answer = solve(puzzle, 1, 20_000_000).solutions[0]
+    if (!answer) return
+    timer.pause()
+    setUndoStack([])
+    setRevealed(true)
+    setShowingSolution(true)
+    setWon(true)
+    setPath(answer)
+  }
+
   const restart = () => {
+    setShowingSolution(false)
     setPath([])
     setUndoStack([])
     setWon(false)
@@ -153,11 +175,15 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           <div className={`progress-fill${won ? ' done' : ''}`} style={{ width: `${(filled / total) * 100}%` }} />
         </div>
         <p className="play-hint">
-          {won
-            ? 'Solved!'
-            : path.length === 0
+          {showingSolution
+            ? 'Solution shown · this puzzle no longer counts toward your stats'
+            : won
+              ? revealed
+                ? 'Solved (unscored)'
+                : 'Solved!'
+              : path.length === 0
               ? 'Touch 1 and drag through every cell, in number order.'
-              : `${filled} / ${total} cells · drag back to erase, tap the path to cut it`}
+                : `${filled} / ${total} cells · drag back to erase, tap the path to cut it${revealed ? ' · unscored' : ''}`}
         </p>
         <div className="play-actions">
           <button type="button" className="pill-button" onClick={undo} disabled={won || !undoStack.length}>
@@ -166,6 +192,16 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           <button type="button" className="pill-button" onClick={clear} disabled={won || !path.length}>
             ✕ Clear
           </button>
+          {!won && (
+            <button type="button" className="pill-button" onClick={() => setConfirmReveal(true)}>
+              💡 Solution
+            </button>
+          )}
+          {showingSolution && (
+            <button type="button" className="pill-button" onClick={restart}>
+              ↻ Try it
+            </button>
+          )}
           {won && (
             <button type="button" className="pill-button accent" onClick={() => onNewRandom(puzzle.size, difficulty)}>
               🎲 New puzzle
@@ -183,7 +219,26 @@ export function NumberConnectPlay({ code, difficulty, onBackToMenu, onNewRandom,
           onNewRandom={() => onNewRandom(puzzle.size, difficulty)}
           onViewStats={() => setShowStats(true)}
           onClose={() => setShowWin(false)}
+          unscored={revealed}
         />
+      )}
+
+      {confirmReveal && (
+        <div className="modal-backdrop" onClick={() => setConfirmReveal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Show the solution?</h2>
+            <p className="modal-note">
+              The answer will be drawn on the board. This puzzle won't count toward your times or best scores, even if you
+              solve it again afterwards.
+            </p>
+            <button type="button" className="pill-button accent wide" onClick={revealSolution}>
+              💡 Show solution
+            </button>
+            <button type="button" className="pill-button wide" onClick={() => setConfirmReveal(false)}>
+              Keep playing
+            </button>
+          </div>
+        </div>
       )}
 
       {showLook && <LookSettingsModal settings={look} onUpdate={updateLook} onClose={() => setShowLook(false)} />}

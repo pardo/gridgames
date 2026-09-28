@@ -10,18 +10,22 @@ interface WinModalProps {
   onNewRandom: () => void
   onViewStats: () => void
   onClose: () => void
+  /** The solution was revealed on this puzzle, so the run isn't recorded. */
+  unscored?: boolean
 }
 
-export function WinModal({ elapsedMs, history, onPlayAgain, onBackToMenu, onNewRandom, onViewStats, onClose }: WinModalProps) {
+export function WinModal({ elapsedMs, history, onPlayAgain, onBackToMenu, onNewRandom, onViewStats, onClose, unscored = false }: WinModalProps) {
   const best = bestTime(history)
-  const isNewBest = best === undefined || elapsedMs <= best
-  const previousRuns = history.slice(1, 6)
+  const isNewBest = !unscored && (best === undefined || elapsedMs <= best)
+  // A scored win is history[0]; an unscored one isn't in the list at all.
+  const previousRuns = history.slice(unscored ? 0 : 1, unscored ? 5 : 6)
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal win-modal" onClick={(e) => e.stopPropagation()}>
         <h2>🎉 Solved!</h2>
         <p className="win-stat">Time: {formatDuration(elapsedMs)}</p>
+        {unscored && <p className="modal-note">Unscored: the solution was shown for this puzzle.</p>}
         {isNewBest && history.length > 1 && <p className="win-best">New best time!</p>}
 
         {previousRuns.length > 0 && (

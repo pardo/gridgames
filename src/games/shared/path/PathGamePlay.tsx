@@ -34,6 +34,8 @@ export interface PathGame<P extends PathPuzzleGrid> {
   solution: (puzzle: P) => number[] | undefined
   /** Hint under the board before the line is started. */
   startHint: string
+  /** Show the current step number on the head of the line. */
+  stepOnHead?: boolean
   /** The game's variants, so the header and stats can name the one being played. */
   variants?: VariantOption[]
 }
@@ -210,6 +212,7 @@ export function PathGamePlay<P extends PathPuzzleGrid>({
           marks={marks}
           ringCell={ringCell}
           isMilestone={(cell, index) => game.isMilestone(puzzle, cell, index)}
+          headLabel={game.stepOnHead ? String(path.length) : undefined}
           path={path}
           onPathChange={changePath}
           onStrokeStart={(before) => (strokeBefore.current = before)}

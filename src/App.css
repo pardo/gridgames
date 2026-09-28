@@ -1236,6 +1236,23 @@
   }
 }
 
+.nc-head-label {
+  pointer-events: none;
+}
+
+.nc-head-label circle {
+  fill: var(--c, var(--accent));
+  stroke: var(--bg);
+  stroke-width: 0.03;
+}
+
+.nc-head-label text {
+  fill: var(--accent-ink);
+  font-family: 'Manrope', 'Inter', system-ui, sans-serif;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
 .nc-head {
   fill: none;
   stroke: var(--accent);

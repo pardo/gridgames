@@ -25,6 +25,8 @@ interface BoardProps {
   ringCell?: number
   /** True when step `index` (0-based) of the line landing on `cell` hits a number: burst and a stronger buzz. */
   isMilestone: (cell: number, index: number) => boolean
+  /** Small badge on the head cell's corner, e.g. the current step number. */
+  headLabel?: string
   path: number[]
   onPathChange: (path: number[]) => void
   /** Called when a drag starts, with the path as it was before it. */
@@ -66,6 +68,7 @@ export function Board({
   marks,
   ringCell,
   isMilestone,
+  headLabel,
   path,
   onPathChange,
   onStrokeStart,
@@ -205,7 +208,7 @@ export function Board({
       const pt = { x: last.x + ((p.x - last.x) * k) / steps, y: last.y + ((p.y - last.y) * k) / steps }
       drag.trail.push(pt)
       if (drag.trail.length > 16) drag.trail.shift()
-      const target = cellUnder(n, pt, cur[cur.length - 1])
+      const target = cellUnder(n, pt, cur[cur.length - 1], rules.diagonals)
       if (target === null) continue
       const moved = moveToward(rules, cur, target, drag.trail)
       if (moved !== cur) {
@@ -304,6 +307,14 @@ export function Board({
             r={0.42}
             style={{ stroke: colorAt(path.length - 1) }}
           />
+        )}
+        {headLabel && path.length > 0 && !solved && (
+          <g className="nc-head-label" style={{ '--c': colorAt(path.length - 1) } as React.CSSProperties}>
+            <circle cx={(head % n) + 0.86} cy={Math.floor(head / n) + 0.14} r={0.16} />
+            <text x={(head % n) + 0.86} y={Math.floor(head / n) + 0.14} dy="0.36em" fontSize={headLabel.length > 2 ? 0.12 : 0.15}>
+              {headLabel}
+            </text>
+          </g>
         )}
       </svg>
 

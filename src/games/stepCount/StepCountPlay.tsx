@@ -44,6 +44,7 @@ const game: PathGame<SCPuzzle> = {
   isSolved,
   solution: (p) => solve(p, 1, 20_000_000).solutions[0],
   startHint: 'Touch 1 and drag through every cell. The cell showing k must be your k-th step.',
+  stepOnHead: true,
   variants: VARIANTS,
 }
 

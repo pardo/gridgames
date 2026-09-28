@@ -8,23 +8,42 @@ const MAX_BRIDGE = 4
 const MAX_OVERSHOOT_UNDO = 2
 /** How far past the head cell's edge the finger must go before it counts as leaving it. */
 const HYSTERESIS = 0.18
+/** With diagonals: how close to a head corner counts as maybe cutting across it. */
+const CORNER = 0.3
+/** With diagonals: a head the finger got less than this far into counts as an overshoot. */
+const GRAZE = 0.3
 
 type Pt = { x: number; y: number }
 
 /**
  * The cell the finger is over, in board cells. Near the head's own border it
  * sticks to the head, so jitter across a line doesn't flip back and forth.
+ *
+ * With diagonal moves, a finger passing close to one of the head's corners
+ * may be heading for the diagonal cell and just clipping a side neighbour on
+ * the way, so near a corner it also sticks to the head until the finger
+ * clearly picks a cell.
  */
-export function cellUnder(n: number, p: Pt, head: number | undefined): number | null {
+export function cellUnder(n: number, p: Pt, head: number | undefined, diagonals = false): number | null {
   if (p.x < 0 || p.y < 0 || p.x >= n || p.y >= n) return null
-  if (head !== undefined) {
-    const hr = Math.floor(head / n)
-    const hc = head % n
-    if (p.x >= hc - HYSTERESIS && p.x < hc + 1 + HYSTERESIS && p.y >= hr - HYSTERESIS && p.y < hr + 1 + HYSTERESIS) {
-      return head
+  const cell = Math.floor(p.y) * n + Math.floor(p.x)
+  if (head === undefined) return cell
+  const hr = Math.floor(head / n)
+  const hc = head % n
+  if (p.x >= hc - HYSTERESIS && p.x < hc + 1 + HYSTERESIS && p.y >= hr - HYSTERESIS && p.y < hr + 1 + HYSTERESIS) {
+    return head
+  }
+  if (diagonals) {
+    const dr = Math.floor(p.y) - hr
+    const dc = Math.floor(p.x) - hc
+    // Only a side neighbour can be a clipped corner; the diagonal cell itself is the goal.
+    if (Math.abs(dr) + Math.abs(dc) === 1) {
+      const kx = p.x < hc + 0.5 ? hc : hc + 1
+      const ky = p.y < hr + 0.5 ? hr : hr + 1
+      if (Math.hypot(p.x - kx, p.y - ky) < CORNER) return head
     }
   }
-  return Math.floor(p.y) * n + Math.floor(p.x)
+  return cell
 }
 
 /** Squared distance from a point to the finger's trail (a polyline). */
@@ -78,17 +97,39 @@ export function moveToward(rules: PathRules, cur: number[], target: number, trai
   // since the finger skipped past the extra cell rather than dwelling on it.
   // Nothing may cost more than the distance to the target: pushing against a
   // wall must not trigger a detour or rewrite the line.
+  //
+  // With diagonals an overshot cell usually touches the intended one too, so
+  // continuing from it looks just as cheap. A head the finger only grazed
+  // (barely past the border it crossed) is erased for free instead.
+  const free = rules.diagonals && cur.length >= 2 && grazed(rules.size, cur[cur.length - 2], head, trail) ? 1 : 0
   let best: number[] | null = null
   let bestCost = dist
   for (let back = 0; back <= MAX_OVERSHOOT_UNDO && back < cur.length; back++) {
     const base = back ? cur.slice(0, cur.length - back) : cur
     const route = bridge(rules, base, target, trail, MAX_BRIDGE)
-    if (route && back + route.length <= bestCost) {
-      bestCost = back + route.length
+    const cost = back - Math.min(back, free) + (route?.length ?? 0)
+    if (route && cost <= bestCost) {
+      bestCost = cost
       best = [...base, ...route]
     }
   }
   return best ?? cur
+}
+
+/**
+ * Did the finger, since `head` joined the line, get less than GRAZE past the
+ * border it crossed coming from `prev`? (The side for an orthogonal step,
+ * the corner for a diagonal one.)
+ */
+function grazed(n: number, prev: number, head: number, trail: Pt[]): boolean {
+  const px = (prev % n) + 0.5
+  const py = Math.floor(prev / n) + 0.5
+  const dx = (head % n) + 0.5 - px
+  const dy = Math.floor(head / n) + 0.5 - py
+  const len = Math.hypot(dx, dy)
+  let deepest = -Infinity
+  for (const t of trail) deepest = Math.max(deepest, ((t.x - px) * dx + (t.y - py) * dy) / len)
+  return deepest - len / 2 < GRAZE
 }
 
 /** Shortest legal extension of `cur` ending on `target`, or null. */

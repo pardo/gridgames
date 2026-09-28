@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { vibrate, type LineSettings } from '../../hooks/useLineSettings'
+import { cellUnder, moveToward } from './drag'
 import { isMulticolor, stepColor } from './lineColors'
 import { PathLine } from './PathLine'
-import { canStep, clueMap, openCellCount, type NCPuzzle } from './puzzle'
+import { clueMap, openCellCount, type NCPuzzle } from './puzzle'
 
 interface BoardProps {
   puzzle: NCPuzzle
@@ -37,17 +38,19 @@ let fxSeq = 0
  * Pointer events cover mouse, pen and touch alike. The board captures the
  * pointer on press so a drag keeps working even if the finger slides off.
  */
+const hasGlow = (style: LineSettings['lineStyle']) => style === 'neon' || style === 'fire'
+
 export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, solved, look }: BoardProps) {
   const n = puzzle.size
   const clue = useMemo(() => clueMap(puzzle), [puzzle])
   const openCells = useMemo(() => openCellCount(puzzle), [puzzle])
-  const lastNumber = puzzle.checkpoints.length
   const boardRef = useRef<HTMLDivElement>(null)
   const pathRef = useRef(path)
   useLayoutEffect(() => {
     pathRef.current = path
   }, [path])
-  const dragRef = useRef<{ id: number; x: number; y: number } | null>(null)
+  /** Active drag: pointer id plus the finger's recent trail in board-cell units. */
+  const dragRef = useRef<{ id: number; trail: { x: number; y: number }[] } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [fx, setFx] = useState<Fx[]>([])
   const timers = useRef<number[]>([])
@@ -122,68 +125,16 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
   const inPath = useMemo(() => new Set(path), [path])
   const nextNumber = useMemo(() => path.reduce((k, c) => (clue[c] ? k + 1 : k), 1), [path, clue])
 
-  /** Try to move the head of the path onto `cell`; returns the new path. */
-  const stepTo = (cur: number[], cell: number): number[] => {
-    const head = cur[cur.length - 1]
-    if (cell === head) return cur
-    // Dragging back onto the previous cell rubs out the last step.
-    if (cur.length > 1 && cell === cur[cur.length - 2]) return cur.slice(0, -1)
-    if (cur.includes(cell)) return cur
-    if (clue[head] === lastNumber) return cur
-    if (!canStep(puzzle, head, cell)) return cur
-    const k = clue[cell]
-    if (k) {
-      const next = cur.reduce((acc, c) => (clue[c] ? acc + 1 : acc), 1)
-      if (k !== next) return cur
-    }
-    return [...cur, cell]
-  }
-
-  /** Cell under a board-relative point, ignoring a thin band on each border to avoid jitter. */
-  const cellAt = (x: number, y: number, size: number, strict: boolean): number | null => {
-    const fx = (x / size) * n
-    const fy = (y / size) * n
-    const col = Math.floor(fx)
-    const row = Math.floor(fy)
-    if (col < 0 || row < 0 || col >= n || row >= n) return null
-    if (strict) {
-      const margin = 0.14
-      const dx = fx - col
-      const dy = fy - row
-      if (dx < margin || dx > 1 - margin || dy < margin || dy > 1 - margin) return null
-    }
-    return row * n + col
-  }
-
-  const applyCell = (cur: number[], cell: number): number[] => {
-    const head = cur[cur.length - 1]
-    const hr = Math.floor(head / n)
-    const hc = head % n
-    const r = Math.floor(cell / n)
-    const c = cell % n
-    // A fast diagonal flick can skip the corner cell: try both L-shaped routes.
-    if (Math.abs(hr - r) === 1 && Math.abs(hc - c) === 1) {
-      for (const via of [hr * n + c, r * n + hc]) {
-        const mid = stepTo(cur, via)
-        if (mid !== cur && mid.length > cur.length) {
-          const done = stepTo(mid, cell)
-          if (done !== mid) return done
-        }
-      }
-      return cur
-    }
-    return stepTo(cur, cell)
-  }
-
+  /** Pointer position in board-cell units (0..n on each axis). */
   const localPoint = (e: React.PointerEvent) => {
     const rect = boardRef.current!.getBoundingClientRect()
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top, size: rect.width }
+    return { x: ((e.clientX - rect.left) / rect.width) * n, y: ((e.clientY - rect.top) / rect.height) * n }
   }
 
   const handleDown = (e: React.PointerEvent) => {
     if (disabled || dragRef.current) return
-    const { x, y, size } = localPoint(e)
-    const cell = cellAt(x, y, size, false)
+    const p = localPoint(e)
+    const cell = cellUnder(n, p, undefined)
     if (cell === null) return
     const cur = pathRef.current
     let next: number[] | null = null
@@ -202,7 +153,7 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
     } catch {
       // Pointer already gone (e.g. a synthetic event); the drag still works while over the board.
     }
-    dragRef.current = { id: e.pointerId, x, y }
+    dragRef.current = { id: e.pointerId, trail: [p] }
     setDragging(true)
     onStrokeStart(cur)
     if (next.length !== cur.length || next[0] !== cur[0]) {
@@ -215,20 +166,24 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
   const handleMove = (e: React.PointerEvent) => {
     const drag = dragRef.current
     if (!drag || drag.id !== e.pointerId) return
-    const { x, y, size } = localPoint(e)
-    // Sample the segment since the last event so quick swipes don't skip cells.
-    const cellPx = size / n
-    const dist = Math.hypot(x - drag.x, y - drag.y)
-    const steps = Math.max(1, Math.ceil(dist / (cellPx / 4)))
+    const p = localPoint(e)
+    const last = drag.trail[drag.trail.length - 1]
+    // Sample long moves so the trail (used to pick a route around corners) stays smooth.
+    const steps = Math.max(1, Math.ceil(Math.hypot(p.x - last.x, p.y - last.y) / 0.34))
     let cur = pathRef.current
-    for (let s = 1; s <= steps; s++) {
-      const px = drag.x + ((x - drag.x) * s) / steps
-      const py = drag.y + ((y - drag.y) * s) / steps
-      const cell = cellAt(px, py, size, true)
-      if (cell !== null) cur = applyCell(cur, cell)
+    for (let k = 1; k <= steps; k++) {
+      const pt = { x: last.x + ((p.x - last.x) * k) / steps, y: last.y + ((p.y - last.y) * k) / steps }
+      drag.trail.push(pt)
+      if (drag.trail.length > 16) drag.trail.shift()
+      const target = cellUnder(n, pt, cur[cur.length - 1])
+      if (target === null) continue
+      const moved = moveToward(puzzle, clue, cur, target, drag.trail)
+      if (moved !== cur) {
+        cur = moved
+        // Only the trail since the head last moved matters for the next route.
+        drag.trail = [pt]
+      }
     }
-    drag.x = x
-    drag.y = y
     if (cur !== pathRef.current) {
       emitFx(pathRef.current, cur)
       pathRef.current = cur
@@ -282,41 +237,21 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
         />
       ))}
 
-      <svg className="nc-overlay" viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
-        <PathLine cells={path} n={n} lineStyle={look.lineStyle} solved={solved} spread={openCells} />
+      {/* Layers, bottom to top. Each animated style lives in its own element so the
+          browser can repaint or composite it without redrawing the rest of the board. */}
+      {hasGlow(look.lineStyle) && (
+        <svg className={`nc-layer nc-glow-layer glow-${look.lineStyle}`} viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
+          <PathLine cells={path} n={n} lineStyle={look.lineStyle} solved={solved} spread={openCells} layer="glow" />
+        </svg>
+      )}
+      <svg className="nc-layer nc-line-layer" viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
+        <PathLine cells={path} n={n} lineStyle={look.lineStyle} solved={solved} spread={openCells} layer="main" />
+      </svg>
+
+      <svg className="nc-layer" viewBox={`0 0 ${n} ${n}`} aria-hidden="true">
         {walls.map((w) => (
           <line key={w.key} className="nc-wall" x1={w.x1} y1={w.y1} x2={w.x2} y2={w.y2} />
         ))}
-        {fx.map((e) =>
-          e.kind === 'spark' ? (
-            <g key={e.id} transform={`translate(${e.x} ${e.y}) scale(${e.r})`}>
-              {/* Four-point twinkle drawn around its own origin, so it scales and spins in place. */}
-              <path
-                className="nc-fx-spark"
-                d="M0,-1 C0.12,-0.12 0.12,-0.12 1,0 C0.12,0.12 0.12,0.12 0,1 C-0.12,0.12 -0.12,0.12 -1,0 C-0.12,-0.12 -0.12,-0.12 0,-1Z"
-                style={
-                  {
-                    '--dx': `${(e.dx ?? 0) / (e.r ?? 1)}px`,
-                    '--dy': `${(e.dy ?? 0) / (e.r ?? 1)}px`,
-                    '--fall': `${0.25 / (e.r ?? 1)}px`,
-                    '--spin': `${e.spin ?? 90}deg`,
-                    '--delay': `${e.delay ?? 0}ms`,
-                    fill: e.color,
-                  } as React.CSSProperties
-                }
-              />
-            </g>
-          ) : (
-            <circle
-              key={e.id}
-              className={e.kind === 'burst' ? 'nc-fx-burst' : 'nc-fx-ripple'}
-              cx={e.x}
-              cy={e.y}
-              r={e.kind === 'burst' ? 0.36 : 0.3}
-              style={{ stroke: e.color }}
-            />
-          ),
-        )}
         {puzzle.checkpoints.map((c, i) => {
           const cx = (c % n) + 0.5
           const cy = Math.floor(c / n) + 0.5
@@ -347,6 +282,39 @@ export function Board({ puzzle, path, onPathChange, onStrokeStart, disabled, sol
           />
         )}
       </svg>
+
+      {/* Effects are plain HTML elements animated with transform/opacity only,
+          which the browser runs on the GPU without repainting the board. */}
+      <div className="nc-fx-layer" aria-hidden="true">
+        {!solved && path.length > 0 && nextNumber <= puzzle.checkpoints.length && (
+          <span
+            className="nc-next-ring"
+            style={{
+              left: `${(((puzzle.checkpoints[nextNumber - 1] % n) + 0.5) / n) * 100}%`,
+              top: `${((Math.floor(puzzle.checkpoints[nextNumber - 1] / n) + 0.5) / n) * 100}%`,
+              width: `${(0.8 / n) * 100}%`,
+            }}
+          />
+        )}
+        {fx.map((e) => {
+          const size = e.kind === 'spark' ? (e.r ?? 0.08) * 2 : e.kind === 'burst' ? 0.72 : 0.6
+          const style: Record<string, string> = {
+            left: `${(e.x / n) * 100}%`,
+            top: `${(e.y / n) * 100}%`,
+            width: `${(size / n) * 100}%`,
+            color: e.color,
+          }
+          if (e.kind === 'spark') {
+            // translate() percentages are relative to the spark's own size.
+            style['--dx'] = `${((e.dx ?? 0) / size) * 100}%`
+            style['--dy'] = `${((e.dy ?? 0) / size) * 100}%`
+            style['--fall'] = `${(0.25 / size) * 100}%`
+            style['--spin'] = `${e.spin ?? 90}deg`
+            style['--delay'] = `${e.delay ?? 0}ms`
+          }
+          return <span key={e.id} className={`nc-fx nc-fx-${e.kind}`} style={style as React.CSSProperties} />
+        })}
+      </div>
     </div>
   )
 }

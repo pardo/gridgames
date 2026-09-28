@@ -634,7 +634,9 @@
 /* Aurora cycles the whole board so cells, numbers and line shift together.
    Greys (walls, blocked cells, unreached numbers) are unaffected by hue-rotate. */
 .nc-board.look-aurora {
-  animation: aurora 4s linear infinite;
+  animation: aurora 6s linear infinite;
+  /* Own GPU layer: the hue rotation is applied at composite time. */
+  will-change: filter;
 }
 
 .nc-cell.blocked {
@@ -647,13 +649,32 @@
     var(--blocked);
 }
 
-.nc-overlay {
+.nc-layer {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
   overflow: visible;
+}
+
+/* The blurred glow is drawn once into its own layer; flickering it is then an
+   opacity change the GPU handles, instead of re-blurring every frame. */
+.nc-glow-layer {
+  will-change: opacity;
+}
+
+.nc-glow-layer .nc-line-glow,
+.nc-glow-layer .nc-fire-glow {
+  animation: none;
+}
+
+.nc-glow-layer.glow-neon {
+  animation: neon-breathe 1.8s ease-in-out infinite;
+}
+
+.nc-glow-layer.glow-fire {
+  animation: fire-flicker 1.1s ease-in-out infinite alternate;
 }
 
 /* ---------- Path line styles ---------- */
@@ -821,13 +842,28 @@
 
 /* ---------- Drag effects ---------- */
 
+/* Effects are HTML elements centred on their cell, animated only with
+   transform and opacity so they run on the GPU. */
+.nc-fx-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.nc-fx,
+.nc-next-ring {
+  position: absolute;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
 .nc-fx-ripple,
 .nc-fx-burst {
-  fill: none;
-  stroke-width: 0.06;
-  transform-box: fill-box;
-  transform-origin: center;
-  pointer-events: none;
+  border-radius: 50%;
+  border: 2px solid currentColor;
 }
 
 .nc-fx-ripple {
@@ -835,7 +871,7 @@
 }
 
 .nc-fx-burst {
-  stroke-width: 0.09;
+  border-width: 3px;
   animation: fx-burst 0.7s ease-out forwards;
 }
 
@@ -861,11 +897,11 @@
   }
 }
 
-/* Sparks are drawn around their own origin (a wrapping <g> places and sizes
-   them), so the default SVG transform origin (0 0) is their centre. CSS px in
-   an SVG transform are user units; --dx/--dy are pre-divided by the size. */
+/* Four-point twinkle. translate() percentages are relative to the spark's own
+   size, which is how --dx/--dy/--fall are expressed. */
 .nc-fx-spark {
-  pointer-events: none;
+  background: currentColor;
+  clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
   transform: scale(0);
   animation: fx-spark 0.65s cubic-bezier(0.15, 0.8, 0.35, 1) var(--delay, 0ms) forwards;
 }
@@ -886,14 +922,22 @@
   }
 }
 
-.nc-board.dragging .nc-head {
-  animation: head-pulse 0.9s ease-in-out infinite;
+/* Pulsing hint around the next number to reach. */
+.nc-next-ring {
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: next-ring 1.4s ease-in-out infinite;
 }
 
-@keyframes head-pulse {
+@keyframes next-ring {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
   50% {
-    stroke-width: 0.1;
-    opacity: 1;
+    transform: scale(1.18);
+    opacity: 0.35;
   }
 }
 
@@ -928,6 +972,8 @@
   .nc-board.look-aurora,
   .nc-fire-glow,
   .nc-line-glow,
+  .nc-glow-layer,
+  .nc-next-ring,
   .nc-line-comet,
   .nc-line-bead,
   .nc-board.wave .nc-cell.filled,
@@ -1110,13 +1156,6 @@
 .nc-number.next circle {
   stroke: var(--accent);
   stroke-width: 0.06;
-  animation: pulse-ring 1.4s ease-in-out infinite;
-}
-
-@keyframes pulse-ring {
-  50% {
-    stroke-width: 0.14;
-  }
 }
 
 .nc-head {
@@ -1126,11 +1165,6 @@
   opacity: 0.7;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .nc-number.next circle {
-    animation: none;
-  }
-}
 
 /* ---------- Modals ---------- */
 

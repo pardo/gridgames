@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "bench": "node scripts/bench.mjs"
+    "bench": "node scripts/bench.mjs",
+    "dragsim": "node scripts/dragsim.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

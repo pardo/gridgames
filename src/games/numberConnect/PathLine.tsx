@@ -11,14 +11,23 @@ interface PathLineProps {
   solved?: boolean
   /** Path length the rainbow spreads over, so colours don't shift as the line grows. */
   spread?: number
+  /**
+   * Which part to draw. On the board the blurred glow of Neon/Fire goes in its
+   * own layer (so its flicker is a cheap opacity change); previews draw 'all'.
+   */
+  layer?: 'all' | 'glow' | 'main'
 }
 
 const center = (c: number, n: number): [number, number] => [(c % n) + 0.5, Math.floor(c / n) + 0.5]
 
 /** The line through the path cells, drawn in one of several styles. Coordinates are in cells. */
-export function PathLine({ cells, n, lineStyle, solved = false, spread }: PathLineProps) {
+export function PathLine({ cells, n, lineStyle, solved = false, spread, layer = 'all' }: PathLineProps) {
   const glowId = 'glow' + useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const glowable = lineStyle === 'neon' || lineStyle === 'fire'
   if (cells.length === 0) return null
+  if (layer === 'glow' && (!glowable || cells.length < 2)) return null
+  const withGlow = layer !== 'main'
+  const withMain = layer !== 'glow'
 
   const pts = cells.map((c) => center(c, n))
   const points = pts.map(([x, y]) => `${x},${y}`).join(' ')
@@ -70,16 +79,20 @@ export function PathLine({ cells, n, lineStyle, solved = false, spread }: PathLi
         ))
       return (
         <g className={cls}>
-          <defs>
-            <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="0.16" />
-            </filter>
-          </defs>
-          <g className="nc-fire-glow" filter={`url(#${glowId})`}>
-            {segs('nc-fire-glow-seg')}
-          </g>
-          {segs('nc-line-seg')}
-          <polyline className="nc-fire-core" points={points} />
+          {withGlow && (
+            <>
+              <defs>
+                <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="0.16" />
+                </filter>
+              </defs>
+              <g className="nc-fire-glow" filter={`url(#${glowId})`}>
+                {segs('nc-fire-glow-seg')}
+              </g>
+            </>
+          )}
+          {withMain && segs('nc-line-seg')}
+          {withMain && <polyline className="nc-fire-core" points={points} />}
         </g>
       )
     }
@@ -93,14 +106,18 @@ export function PathLine({ cells, n, lineStyle, solved = false, spread }: PathLi
     case 'neon':
       return (
         <g className={cls}>
-          <defs>
-            <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="0.14" />
-            </filter>
-          </defs>
-          <polyline className="nc-line-glow" points={points} filter={`url(#${glowId})`} />
-          <polyline className="nc-line-base" points={points} />
-          <polyline className="nc-line-core" points={points} />
+          {withGlow && (
+            <>
+              <defs>
+                <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="0.14" />
+                </filter>
+              </defs>
+              <polyline className="nc-line-glow" points={points} filter={`url(#${glowId})`} />
+            </>
+          )}
+          {withMain && <polyline className="nc-line-base" points={points} />}
+          {withMain && <polyline className="nc-line-core" points={points} />}
         </g>
       )
     case 'comet':

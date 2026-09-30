@@ -1428,51 +1428,30 @@
 /* ---------- Heyawake board ---------- */
 
 /*
- * One job per colour: ink for shaded cells, a soft accent tint for cells
- * marked open, red only for mistakes, green only for the solved board.
+ * Built on the shared theme tokens, like the Number Connect board:
+ * --blocked for shaded cells, an --accent tint for cells marked open,
+ * --line for walls, --danger for mistakes, --success-bg once solved.
  * Finished rooms fade their number rather than adding another colour.
  */
 .hy-board {
   --n: 6;
-  --hy-cell: var(--surface);
-  --hy-shade: #2b2a36;
-  --hy-on-shade: #f2f1ef;
-  --hy-open: color-mix(in srgb, var(--accent) 16%, var(--hy-cell));
-  --hy-grid: color-mix(in srgb, var(--line) 12%, transparent);
-  --hy-wall: var(--line);
-  --hy-border: 0.08;
+  --hy-shade: var(--blocked);
+  --hy-on-shade: var(--on-blocked);
+  --hy-open: color-mix(in srgb, var(--accent) 30%, transparent);
+  --hy-grid: color-mix(in srgb, var(--line) 14%, transparent);
   position: relative;
   width: min(100cqw, 100cqh, 620px);
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(var(--n), 1fr);
   grid-template-rows: repeat(var(--n), 1fr);
-  border: 3px solid var(--hy-wall);
+  border: 2px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
-  background: var(--hy-cell);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   box-shadow: var(--shadow);
   touch-action: none;
   cursor: pointer;
-}
-
-/* Dark: lift the board off the page so near-black shading still reads as the darkest thing. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .hy-board {
-    --hy-cell: #26262f;
-    --hy-shade: #09090c;
-    --hy-open: color-mix(in srgb, var(--accent) 26%, var(--hy-cell));
-    --hy-grid: color-mix(in srgb, var(--line) 9%, transparent);
-    --hy-wall: color-mix(in srgb, var(--line) 85%, transparent);
-  }
-}
-
-:root[data-theme='dark'] .hy-board {
-  --hy-cell: #26262f;
-  --hy-shade: #09090c;
-  --hy-open: color-mix(in srgb, var(--accent) 26%, var(--hy-cell));
-  --hy-grid: color-mix(in srgb, var(--line) 9%, transparent);
-  --hy-wall: color-mix(in srgb, var(--line) 85%, transparent);
 }
 
 .hy-cell {
@@ -1541,9 +1520,9 @@
   opacity: 1;
 }
 
-/* On ink, a lighter red; on a red mistake cell, plain white. */
+/* On ink, a lighter red; on a red mistake cell, the plain on-ink colour. */
 .hy-cell.shaded .hy-clue.bad {
-  color: color-mix(in srgb, var(--danger) 55%, white);
+  color: color-mix(in srgb, var(--danger) 55%, var(--on-blocked));
 }
 
 .hy-cell.shaded.err .hy-clue {
@@ -1552,7 +1531,7 @@
 
 /* Mistakes: a red tint and a single shake. */
 .hy-cell.err {
-  background: color-mix(in srgb, var(--danger) 22%, var(--hy-cell));
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
   animation: hy-shake 0.3s ease-in-out;
 }
 
@@ -1579,9 +1558,9 @@
 }
 
 .hy-border {
-  stroke: var(--hy-wall);
-  stroke-width: var(--hy-border);
-  stroke-linecap: square;
+  stroke: var(--line);
+  stroke-width: 0.1;
+  stroke-linecap: round;
 }
 
 .hy-bad-run {
@@ -1593,7 +1572,7 @@
 
 /* Solved: the open cells turn green, sweeping in from the top-left with the wave. */
 .hy-board.solved .hy-cell:not(.shaded) {
-  background: color-mix(in srgb, var(--success) 24%, var(--hy-cell));
+  background: var(--success-bg);
 }
 
 .hy-board.solved .hy-clue {
@@ -1606,10 +1585,10 @@
 
 @keyframes hy-wave {
   from {
-    background: var(--hy-cell);
+    background: transparent;
   }
   40% {
-    background: color-mix(in srgb, var(--success) 55%, var(--hy-cell));
+    background: color-mix(in srgb, var(--success) 45%, transparent);
     transform: scale(0.9);
   }
 }

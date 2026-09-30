@@ -1430,6 +1430,9 @@
 .hy-board {
   --n: 6;
   --hy-shade: #2a2a31;
+  /* Dotted (known unshaded) cells get a pale fill so they stand apart from untouched ones. */
+  --hy-dot-bg: #d6f1e3;
+  --hy-dot: #1f7a55;
   --hy-border: 0.08;
   position: relative;
   width: min(100cqw, 100cqh, 620px);
@@ -1449,11 +1452,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .hy-board {
     --hy-shade: #050507;
+    --hy-dot-bg: #c3e6d4;
   }
 }
 
 :root[data-theme='dark'] .hy-board {
   --hy-shade: #050507;
+  --hy-dot-bg: #c3e6d4;
 }
 
 .hy-cell {
@@ -1463,6 +1468,19 @@
   border-right: 1px solid color-mix(in srgb, var(--line) 14%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 14%, transparent);
   transition: background-color 0.12s ease;
+}
+
+.hy-cell.dot {
+  background: var(--hy-dot-bg);
+}
+
+/* The fill is light in both themes, so its number stays dark. */
+.hy-cell.dot .hy-clue:not(.bad) {
+  color: #1c1c1e;
+}
+
+.hy-cell.dot .hy-clue.ok {
+  color: var(--hy-dot);
 }
 
 /* Shading pops in like a drop of ink. */
@@ -1484,7 +1502,7 @@
   width: 22%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--ink) 55%, transparent);
+  background: var(--hy-dot);
   animation: hy-dot 0.16s ease-out;
 }
 

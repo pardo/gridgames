@@ -12,7 +12,7 @@ export const heyawake: GameDefinition = {
     'All unshaded cells must form one connected area.',
     'A room with a number has exactly that many shaded cells.',
     'A straight line of unshaded cells may not cross more than one bold border.',
-    'Tap to shade, tap again for a dot (a cell you know is unshaded), again to clear. Drag to paint several.',
+    'Tap to shade, tap again to mark a cell you know is unshaded (it turns light), again to clear. Drag to paint several.',
   ],
   sizes: [6, 7, 8, 9, 10],
   difficultyBlurbs: {

@@ -23,9 +23,9 @@ const FX_LIFETIME = 600
 let fxSeq = 0
 
 /**
- * Tap cycles a cell: empty, shaded, dot. Dragging paints whatever the first
+ * Tap cycles a cell: empty, shaded, marked open (a light fill). Dragging paints whatever the first
  * cell became onto every cell it passes that was in the same state as the
- * first one was, so a stroke never wipes out other marks. Right-click dots.
+ * first one was, so a stroke never wipes out other marks. Right-click marks open.
  */
 export function HeyawakeBoard({ puzzle, marks, analysis, onMarksChange, onStrokeStart, disabled, solved, look }: HeyawakeBoardProps) {
   const n = puzzle.size
@@ -134,7 +134,6 @@ export function HeyawakeBoard({ puzzle, marks, analysis, onMarksChange, onStroke
         return (
           <div key={c} className={cls} style={{ '--d': Math.floor(c / n) + (c % n) } as React.CSSProperties}>
             {mark === SHADED && <span className="hy-ink" />}
-            {mark === DOT && <span className={`hy-dot${clue !== null ? ' corner' : ''}`} />}
             {clue !== null && (
               <span
                 className={`hy-clue${analysis.badRooms.has(roomIndex!) ? ' bad' : analysis.okRooms.has(roomIndex!) ? ' ok' : ''}`}

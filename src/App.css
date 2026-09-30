@@ -1430,8 +1430,8 @@
 .hy-board {
   --n: 6;
   --hy-shade: #2a2a31;
-  /* Dotted (known unshaded) cells get a pale fill so they stand apart from untouched ones. */
-  --hy-dot-bg: #d6f1e3;
+  /* Cells marked open (known unshaded) get a pale fill so they stand apart from untouched ones. */
+  --hy-dot-bg: #c6ead7;
   --hy-dot: #1f7a55;
   --hy-border: 0.08;
   position: relative;
@@ -1495,29 +1495,6 @@
   from {
     transform: scale(0.55);
     border-radius: 40%;
-  }
-}
-
-.hy-dot {
-  width: 22%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: var(--hy-dot);
-  animation: hy-dot 0.16s ease-out;
-}
-
-/* On a numbered cell the dot moves out of the number's way. */
-.hy-dot.corner {
-  position: absolute;
-  right: 10%;
-  bottom: 10%;
-  width: 15%;
-}
-
-@keyframes hy-dot {
-  from {
-    transform: scale(0);
-    opacity: 0;
   }
 }
 
@@ -1605,10 +1582,6 @@
   background: color-mix(in srgb, var(--success) 30%, transparent);
 }
 
-.hy-board.solved .hy-dot {
-  opacity: 0;
-}
-
 .hy-board.solved .hy-cell:not(.shaded) .hy-clue {
   color: var(--ink);
 }
@@ -1629,7 +1602,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hy-ink,
-  .hy-dot,
   .hy-clue.ok,
   .hy-cell.err,
   .hy-board.wave .hy-cell:not(.shaded) {

@@ -191,7 +191,7 @@ export function HeyawakePlay({ code, difficulty, onBackToMenu, onNewRandom, them
                 ? 'Solved (unscored)'
                 : 'Solved!'
               : decided === 0
-                ? 'Tap to shade, again for a dot, again to clear. Drag to paint.'
+                ? 'Tap to shade, again to mark it open, again to clear. Drag to paint.'
                 : mistakes
                   ? 'Something in red breaks a rule'
                   : `${shadedCount} shaded · ${analysis.okRooms.size} / ${numbered} numbered rooms done${revealed ? ' · unscored' : ''}`}
